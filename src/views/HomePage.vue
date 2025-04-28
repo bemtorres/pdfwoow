@@ -182,10 +182,8 @@
           <small class="card-text">Añadir más archivos.</small>
         </div>
       </div>
-      <!-- <div class="my-3 d-flex justify-content-center">
-        <button class="btn btn-primary btn-lg" @click="addPdf">Añadir más archivos</button>
-      </div> -->
-      <!-- <div class="my-3">
+   
+      <div class="my-3">
 
         <label for="formatSelect">Formato de PDF:</label>
         <select id="formatSelect" v-model="selectedFormat">
@@ -193,7 +191,7 @@
           <option value="letter">Carta (Letter)</option>
           <option value="legal">Oficio (Legal)</option>
         </select>
-      </div> -->
+      </div>
 
       <div class="card bg-danger text-white shadow-sm card-hover rounded mt-3"  @click="downloadPdf">
         <div class="card-body text-center">
@@ -202,9 +200,6 @@
           <!-- <small class="card-text">Añadir más archivos.</small> -->
         </div>
       </div>
-      <!-- <div class="my-3 d-flex justify-content-center mt-5">
-        <button class="btn btn-danger btn-lg">Descargar PDF</button>
-      </div>   -->
     </div>
   </div>
 
@@ -235,7 +230,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@4.10.38/b
 const pdfPages = ref([]); // Array para almacenar las páginas del PDF
 const selectedPage = ref(null); // Página seleccionada para mostrar en el modal
 const selectedFormat = ref('a4'); // Formato seleccionado para la descarga
-const isModalVisible = ref(false);
+const isModalVisible = ref(false); // Estado del modal
 
 const initializeSortable = () => {
   const sortableContainer = document.getElementById("pdf-preview");
@@ -325,58 +320,64 @@ const extractPagesFromPDF = (pdf) => {
         });
     });
   }
-};
+}
 
 // Función para ver página en el modal más grande
 const viewPage = (page, index) => {
   selectedPage.value = page;
-  isModalVisible.value = true; 
-};
+  isModalVisible.value = true;
+}
 
 const closeModal = () => {
   isModalVisible.value = false;
-};
+  selectedPage.value = null;
+}
 
 // Función para alternar el estado de eliminación de una página
 const toggleTrash = (index) => {
   const page = pdfPages.value[index];
   page.deleted = !page.deleted;
-};
+}
 
 // Función para descargar el PDF con las páginas modificadas
 const downloadPdf = () => {
-  const doc = new jsPDF();
+  if (pdfPages.value.length === 0) return;
 
-  // Definimos el tamaño de la página según el formato seleccionado
-  let pageWidth = 210; // Default A4
-  let pageHeight = 297;
-
-  // Cambiar tamaño de la página según el formato
+  // Definimos tamaño según el formato
+  let pageSize = "a4"; // Default
   if (selectedFormat.value === "letter") {
-    pageWidth = 216;  // Carta
-    pageHeight = 279;
+    pageSize = "letter";
   } else if (selectedFormat.value === "legal") {
-    pageWidth = 216;  // Oficio
-    pageHeight = 356;
+    pageSize = "legal";
   }
 
-  pdfPages.value.forEach((page, index) => {
-    if (!page.deleted) {
-      // Detectar la orientación de la página
-      const pageOrientation = page.orientation === "landscape" ? "l" : "p"; // "l" para horizontal, "p" para vertical
+  const firstPage = pdfPages.value.find(page => !page.deleted);
+  const orientation = firstPage?.orientation === "landscape" ? "landscape" : "portrait";
 
-      // Si la página es horizontal (landscape), agregamos la página con las dimensiones correspondientes
-      if (pageOrientation === "l") {
-        doc.addPage(pageWidth, pageHeight, pageOrientation);  // Carta u Oficio en horizontal
+  // Crear el primer documento
+  const doc = new jsPDF({
+    orientation,
+    unit: "mm",
+    format: pageSize,
+  });
+
+  let isFirstPage = true;
+
+  pdfPages.value.forEach((page) => {
+    if (!page.deleted) {
+      if (!isFirstPage) {
+        const pageOrientation = page.orientation === "landscape" ? "landscape" : "portrait";
+        doc.addPage(pageSize, pageOrientation);
       } else {
-        doc.addPage(pageWidth, pageHeight, pageOrientation);  // Carta u Oficio en vertical
+        isFirstPage = false;
       }
 
-      // Renderizar la página original (sin convertir a imagen) pero ajustando el tamaño y la orientación
-      doc.addImage(page.url, "PNG", 0, 0, pageWidth, pageHeight);
+      // Insertar imagen
+      const { internal } = doc;
+      const pageWidth = internal.pageSize.getWidth();
+      const pageHeight = internal.pageSize.getHeight();
 
-      // Si no es la última página, agregar una nueva página
-      if (index < pdfPages.value.length - 1) doc.addPage();
+      doc.addImage(page.url, "PNG", 0, 0, pageWidth, pageHeight);
     }
   });
 
